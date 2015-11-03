@@ -1,0 +1,96 @@
+function out = mmflx2kgm2s(inpt, type, varargin)
+% The function converts a datastructure with flux variables in units of
+% [kg/m2/s] to [mm/month]
+%--------------------------------------------------------------------------
+% Input (required):
+% - inpt        CF-conform data structure 
+% - type        
+%               1: Convert to [mm/month]
+%               2: Convert to [mm/day]
+% - varargin    Names of the variables which should be converted; if
+%               varargin is empty, the function transforms all variables
+%               (except the dimension variables time, lat, lon, and some
+%               z-axis) to the new units
+%
+% Output:
+% - out     
+%--------------------------------------------------------------------------
+% Author: Christof Lorenz
+% Date:   November 2015
+%--------------------------------------------------------------------------
+% Uses: 
+%--------------------------------------------------------------------------
+
+if isempty(type)
+    type = 2;
+end
+
+out = inpt;
+
+if isempty(varargin)
+    % First, get the names of the dimensions
+    dims = inpt.Dimensions;
+    vars = fieldnames(inpt.Variables);
+    
+    % Get the variable IDs which do not contain dimension variables
+    for i = 1:length(dims)
+        dim_ids(i) = find(ismember(vars, dims{i}));
+    end
+    
+    vars(dim_ids, :) = [];
+else
+    vars = varargin;
+end
+
+% Check the unit of the variables
+if type == 1
+    % Conversion to [mm/month]
+    for i = 1:length(vars)
+        if ~strcmp(inpt.Variables.(vars{i}).units, 'kg/m^2/s')
+            warning(['mmflx2kgm2s.m: Variable ', vars{i}, 'is not in units of [kg/m^2/s]; skipping variable!']);
+        else
+        
+            DateTime = inpt.Data.time;
+            Yrs      = DateTime(:, 1);
+            Mnths    = DateTime(:, 2);
+            nrd      = eomday(Yrs, Mnths);
+            
+            tmp = size(inpt.Data.(vars{i}));
+            
+            if length(tmp) == 3
+                for j = 1:nrd
+                    out.Data.(vars{i})(j, :, :) = inpt.Data.(vars{i})(j, :, :)*3600*24*nrd(j);
+                end
+            elseif length(tmp) == 4
+                for j = 1:nrd
+                    out.Data.(vars{i})(j, :, :, :) = inpt.Data.(vars{i})(j, :, :, :)*3600*24*nrd(j);
+                end
+            end
+            out.Variables.(vars{i}).units     = 'mm/month';
+            out.Variables.(vars{i}).valid_max = max(out.Data.(vars{i})(:), [], 'omitnan');
+            out.Variables.(vars{i}).valid_min = min(out.Data.(vars{i})(:), [], 'omitnan');
+        end
+    end
+    
+    out.DataInfo.history = strcat(out.DataInfo.history, ...
+                    [datestr(now), '; kgm2s2mmflx.m: Converted units from [kg/m^2/s] to [mm/month]. \n']);    
+
+elseif type == 2
+    
+    % Conversion to [mm/day]
+    for i = 1:length(vars)
+        if ~strcmp(inpt.Variables.(vars{i}).units, 'kg/m^2/s')
+            warning(['mmflx2kgm2s.m: Variable ', vars{i}, 'is not in units of [kg/m^2/s]; skipping variable!']);
+        else
+            out.Data.(vars{i})                = inpt.Data.(vars{i})*3600*24;
+            out.Variables.(vars{i}).units     = 'mm/day';
+            out.Variables.(vars{i}).valid_max = max(out.Data.(vars{i})(:), [], 'omitnan');
+            out.Variables.(vars{i}).valid_min = min(out.Data.(vars{i})(:), [], 'omitnan');
+        end
+    end
+    
+        
+    out.DataInfo.history = strcat(out.DataInfo.history, ...
+        [datestr(now), '; kgm2s2mmflx.m: Converted units from [kg/m^2/s] to [mm/day]. \n']);    
+end
+           
